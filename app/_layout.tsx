@@ -21,6 +21,21 @@ export default function RootLayout() {
           },
         }}
       />
+      <Stack.Screen
+        name="images/images"
+        options={{
+          headerShown: true,
+          title: '',
+          headerLeft: () => (
+            <Pressable onPress={() => router.back()} style={{ marginLeft: 10 }}>
+              <AntDesign name="arrowleft" size={24} color="black" />
+            </Pressable>
+          ),
+          headerStyle: {
+            backgroundColor: '#fff',
+          },
+        }}
+      />
     </Stack>
   );
 }

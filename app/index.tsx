@@ -11,10 +11,10 @@ export default function Index() {
         title="ไปที่หน้ารูปภาพ"
         onPress={() => router.push("/images/images")}
       />
-      <CustomButton
+      {/* <CustomButton
         title="ไปที่หน้าวิดีโอ"
         onPress={() => router.push("/videos/videos")}
-      />
+      /> */}
     </View>
   );
 }
