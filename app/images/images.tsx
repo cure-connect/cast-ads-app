@@ -1,7 +1,7 @@
+import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-
 interface ImageItem {
   mediaId: string;
   name: string;
@@ -13,14 +13,12 @@ export default function Images() {
   const [images, setImages] = useState<ImageItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const { apiUrl } = Constants.expoConfig?.extra ?? {};
 
   useEffect(() => {
     const fetchImages = async () => {
       try {
-        const response = await fetch("http://141.98.17.189:3004/api/media");
-        if (!response.ok) {
-          throw new Error("Failed to fetch images");
-        }
+        const response = await fetch(`${apiUrl}/api/media`);
         const result = await response.json();
         const data: ImageItem[] = result.data.map((item: any) => ({
           mediaId: item.mediaId,
@@ -29,13 +27,16 @@ export default function Images() {
         }));
         setImages(data);
       } catch (err: any) {
-        setError(err.message || "Something went wrong");
+        console.error(err);
       } finally {
         setLoading(false);
       }
     };
 
     fetchImages();
+    const intervalId = setInterval(fetchImages, 5000);
+
+    return () => clearInterval(intervalId);
   }, []);
 
   if (loading) {
