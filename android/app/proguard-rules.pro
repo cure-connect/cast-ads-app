@@ -11,4 +11,9 @@
 -keep class com.swmansion.reanimated.** { *; }
 -keep class com.facebook.react.turbomodule.** { *; }
 
+# Keep okhttp3 classes (for network)
+-keep class okhttp3.** { *; }
+-keep interface okhttp3.** { *; }
+-dontwarn okhttp3.**
+
 # Add any project specific keep options here:

@@ -13,7 +13,7 @@ export default function VideoPlayer() {
   return (
     <View style={styles.container}>
       <Video
-        source={{ uri: videoMap[String(id)] }}  // ✅ ใช้ URL แทน require()
+        source={{ uri: videoMap[String(id)] }}
         useNativeControls
         resizeMode={ResizeMode.CONTAIN}
         style={styles.video}
