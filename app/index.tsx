@@ -1,36 +1,18 @@
-// import CustomButton from "@/components/CustomButton";
-// import { useRouter } from "expo-router";
-// import { StyleSheet, View } from "react-native";
-
-// export default function Index() {
-//   const router = useRouter();
-
-//   return (
-//     <View style={styles.container}>
-//       <CustomButton
-//         title="ไปที่หน้ารูปภาพ"
-//         onPress={() => router.push("/images/images")}
-//       />
-//       {/* <CustomButton
-//         title="ไปที่หน้าวิดีโอ"
-//         onPress={() => router.push("/videos/videos")}
-//       /> */}
-//     </View>
-//   );
-// }
-
-// const styles = StyleSheet.create({
-//   container: {
-//     flex: 1,
-//     justifyContent: "center",
-//     alignItems: "center",
-//     padding: 20,
-//   },
-// });
 import Constants from "expo-constants";
+import * as Device from "expo-device";
+import * as Network from "expo-network";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  FlatList,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+
 interface ImageItem {
   mediaId: string;
   name: string;
@@ -39,10 +21,39 @@ interface ImageItem {
 
 export default function Images() {
   const router = useRouter();
+
   const [images, setImages] = useState<ImageItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [deviceInfo, setDeviceInfo] = useState<any>({});
+  const [ip, setIp] = useState<string>("");
+  const [networkstate, setNetworkState] = useState<string>("");
+
   const { apiUrl } = Constants.expoConfig?.extra ?? {};
+
+  useEffect(() => {
+
+    const info = {
+      deviceId: Device.osInternalBuildId ?? "unknown-device",
+      name: Device.designName,
+      ip: ip,
+      port: 3001,
+      capabilities: ["video", "audio", "image"],
+      status: "online",
+    };
+
+    setDeviceInfo(info);
+
+    (async () => {
+      const ipAddress = await Network.getIpAddressAsync();
+      const networkinfo = await Network.getNetworkStateAsync();
+
+      setNetworkState(String(networkinfo.isConnected));
+      setIp(ipAddress);
+
+    })();
+  }, []);
 
   useEffect(() => {
     const fetchImages = async () => {
@@ -57,6 +68,7 @@ export default function Images() {
         setImages(data);
       } catch (err: any) {
         console.error(err);
+        setError("ไม่สามารถโหลดรูปภาพได้");
       } finally {
         setLoading(false);
       }
@@ -85,34 +97,54 @@ export default function Images() {
   }
 
   return (
-    <FlatList
-      data={images}
-      keyExtractor={(item) => item.mediaId}
-      renderItem={({ item }) => (
-        <TouchableOpacity
-          style={styles.item}
-          onPress={() =>
-            router.push({
-              pathname: "/images/image-preview",
-              params: { url: item.url },
-            })
-          }
-        >
-          <Image
-            source={{ uri: item.url }}
-            style={styles.image}
-            resizeMode="cover"
-          />
-          <Text style={styles.text}>{item.name}</Text>
-        </TouchableOpacity>
-      )}
-    />
+    <View style={{ flex: 1 }}>
+      <View style={styles.deviceBox}>
+        <Text style={styles.deviceText}>Device: {deviceInfo.deviceId}</Text>
+        <Text style={styles.deviceText}>Model: {deviceInfo.name}</Text>
+        <Text style={styles.deviceText}>IP: {deviceInfo.ip}</Text>
+        <Text style={styles.deviceText}>Status: {networkstate ? 'online' : 'offline'}</Text>
+      </View>
+
+      <FlatList
+        data={images}
+        keyExtractor={(item) => item.mediaId}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.item}
+            onPress={() =>
+              router.push({
+                pathname: "/images/image-preview",
+                params: { url: item.url },
+              })
+            }
+          >
+            <Image
+              source={{ uri: item.url }}
+              style={styles.image}
+              resizeMode="cover"
+            />
+            <Text style={styles.text}>{item.name}</Text>
+          </TouchableOpacity>
+        )}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  deviceBox: {
+    backgroundColor: "#f5f5f5",
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "#ddd",
+    marginTop: 50
+  },
+  deviceText: {
+    fontSize: 14,
+    marginBottom: 4,
+  },
   item: {
-    marginTop: 50,
+    marginTop: 30,
     padding: 10,
     borderBottomWidth: 1,
     borderBottomColor: "#ccc",
