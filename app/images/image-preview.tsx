@@ -1,17 +1,17 @@
-import { useLocalSearchParams } from "expo-router";
-import { Image, StyleSheet, View } from "react-native";
+import { router, useLocalSearchParams } from "expo-router";
+import { Image, Pressable, StyleSheet } from "react-native";
 
 export default function ImagePreview() {
   const { url } = useLocalSearchParams();
 
   return (
-    <View style={styles.container}>
+    <Pressable style={styles.container} onPress={() => router.back()}>
       <Image
         source={{ uri: url as string }}
         style={styles.image}
         resizeMode="contain"
       />
-    </View>
+    </Pressable>
   );
 }
 
