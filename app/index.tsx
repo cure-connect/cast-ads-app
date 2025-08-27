@@ -32,26 +32,40 @@ export default function Images() {
 
   const { apiUrl } = Constants.expoConfig?.extra ?? {};
 
+
   useEffect(() => {
-
-    const info = {
-      deviceId: Device.osInternalBuildId ?? "unknown-device",
-      name: Device.designName,
-      ip: ip,
-      port: 3001,
-      capabilities: ["video", "audio", "image"],
-      status: "online",
-    };
-
-    setDeviceInfo(info);
-
     (async () => {
-      const ipAddress = await Network.getIpAddressAsync();
-      const networkinfo = await Network.getNetworkStateAsync();
+      try {
+        const ipAddress = await Network.getIpAddressAsync();
+        const networkinfo = await Network.getNetworkStateAsync();
 
-      setNetworkState(String(networkinfo.isConnected));
-      setIp(ipAddress);
+        setNetworkState(String(networkinfo.isConnected));
+        setIp(ipAddress);
 
+        const info = {
+          deviceId: Device.osInternalBuildId ?? "unknown-device",
+          name: Device.designName ?? "Unknown Device",
+          ip: ipAddress,
+          port: 3001,
+          capabilities: ["video", "audio", "image"],
+          status: "online",
+        };
+
+        setDeviceInfo(info);
+
+        const response = await fetch(`${apiUrl}/api/devices/register`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(info),
+        });
+
+        const data = await response.json();
+        console.log("✅ Register success:", data);
+      } catch (err) {
+        console.error("❌ Register failed:", err);
+      }
     })();
   }, []);
 
