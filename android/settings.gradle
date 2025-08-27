@@ -35,5 +35,9 @@ rootProject.name = 'cast-ads-app'
 
 expoAutolinking.useExpoVersionCatalog()
 
+include ':react-native-device-info'
+project(':react-native-device-info').projectDir = new File(rootProject.projectDir, '../node_modules/react-native-device-info/android')
+
+
 include ':app'
 includeBuild(expoAutolinking.reactNativeGradlePlugin)

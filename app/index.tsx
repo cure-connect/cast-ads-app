@@ -13,13 +13,15 @@ import {
   View,
 } from "react-native";
 
+import DeviceInfo from 'react-native-device-info';
+
 interface ImageItem {
   mediaId: string;
   name: string;
   url: string;
 }
 
-export default function Images() {
+export default function Index() {
   const router = useRouter();
 
   const [images, setImages] = useState<ImageItem[]>([]);
@@ -31,7 +33,6 @@ export default function Images() {
   const [networkstate, setNetworkState] = useState<string>("");
 
   const { apiUrl } = Constants.expoConfig?.extra ?? {};
-
 
   useEffect(() => {
     (async () => {
@@ -70,6 +71,7 @@ export default function Images() {
   }, []);
 
   useEffect(() => {
+
     const fetchImages = async () => {
       try {
         const response = await fetch(`${apiUrl}/api/media`);
@@ -110,6 +112,15 @@ export default function Images() {
     );
   }
 
+    const sn = DeviceInfo.getSerialNumber();
+    const deviceId = DeviceInfo.getDeviceId();
+    const deviceName = DeviceInfo.getDeviceNameSync();
+    const ipAddress = DeviceInfo.getIpAddressSync();
+    const instaceId = DeviceInfo.getInstanceIdSync();
+    const macAddress = DeviceInfo.getMacAddressSync();
+    const modelName = DeviceInfo.getModel();
+    const uniqueId = DeviceInfo.getUniqueIdSync();
+
   return (
     <View style={{ flex: 1 }}>
       <View style={styles.deviceBox}>
@@ -117,6 +128,14 @@ export default function Images() {
         <Text style={styles.deviceText}>Model: {deviceInfo.name}</Text>
         <Text style={styles.deviceText}>IP: {deviceInfo.ip}</Text>
         <Text style={styles.deviceText}>Status: {networkstate ? 'online' : 'offline'}</Text>
+        <Text style={styles.deviceText}>sn: {sn}</Text>
+        <Text style={styles.deviceText}>deviceId: {deviceId}</Text>
+        <Text style={styles.deviceText}>deviceName: {deviceName}</Text>
+        <Text style={styles.deviceText}>ipAddress: {ipAddress}</Text>
+        <Text style={styles.deviceText}>instaceId: {instaceId}</Text>
+        <Text style={styles.deviceText}>macAddress: {macAddress}</Text>
+        <Text style={styles.deviceText}>modelName: {modelName}</Text>
+        <Text style={styles.deviceText}>uniqueId: {uniqueId}</Text>
       </View>
 
       <FlatList
