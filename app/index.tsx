@@ -37,19 +37,39 @@ export default function Index() {
   useEffect(() => {
     (async () => {
       try {
+        const getsn = DeviceInfo.getSerialNumberSync();
+        const sn = !getsn || getsn.toLowerCase() === "unknown" ? "not allowed" : getsn;
+        const deviceId = DeviceInfo.getDeviceId();
+        const deviceName = DeviceInfo.getDeviceNameSync();
+        const ipaddress = DeviceInfo.getIpAddressSync();
+        const instaceId = DeviceInfo.getInstanceIdSync();
+        const macAddress = DeviceInfo.getMacAddressSync();
+        const modelName = DeviceInfo.getModel();
+        const uniqueId = DeviceInfo.getUniqueIdSync();
+
         const ipAddress = await Network.getIpAddressAsync();
         const networkinfo = await Network.getNetworkStateAsync();
 
         setNetworkState(String(networkinfo.isConnected));
         setIp(ipAddress);
 
+        console.log('sn', sn)
+
         const info = {
-          deviceId: Device.osInternalBuildId ?? "unknown-device",
+          serialNumber: sn,
+          deviceId: deviceId,
+          deviceOS: Device.osInternalBuildId ?? "unknown-device",
+          deviceName: deviceName,
           name: Device.designName ?? "Unknown Device",
           ip: ipAddress,
+          ipAddress: ipaddress,
+          instaceId: instaceId,
+          macAddress: macAddress,
+          modelName: modelName,
+          uniqueId: uniqueId,
           port: 3001,
           capabilities: ["video", "audio", "image"],
-          status: "online",
+          status: networkstate ? "online" : "offline",
         };
 
         setDeviceInfo(info);
@@ -112,14 +132,15 @@ export default function Index() {
     );
   }
 
-    const sn = DeviceInfo.getSerialNumber();
-    const deviceId = DeviceInfo.getDeviceId();
-    const deviceName = DeviceInfo.getDeviceNameSync();
-    const ipAddress = DeviceInfo.getIpAddressSync();
-    const instaceId = DeviceInfo.getInstanceIdSync();
-    const macAddress = DeviceInfo.getMacAddressSync();
-    const modelName = DeviceInfo.getModel();
-    const uniqueId = DeviceInfo.getUniqueIdSync();
+  const getsn = DeviceInfo.getSerialNumberSync();
+  const sn = !getsn || getsn.toLowerCase() === "unknown" ? "not allowed" : getsn;
+  const deviceId = DeviceInfo.getDeviceId();
+  const deviceName = DeviceInfo.getDeviceNameSync();
+  const ipaddress = DeviceInfo.getIpAddressSync();
+  const instaceId = DeviceInfo.getInstanceIdSync();
+  const macAddress = DeviceInfo.getMacAddressSync();
+  const modelName = DeviceInfo.getModel();
+  const uniqueId = DeviceInfo.getUniqueIdSync();
 
   return (
     <View style={{ flex: 1 }}>
@@ -131,7 +152,7 @@ export default function Index() {
         <Text style={styles.deviceText}>sn: {sn}</Text>
         <Text style={styles.deviceText}>deviceId: {deviceId}</Text>
         <Text style={styles.deviceText}>deviceName: {deviceName}</Text>
-        <Text style={styles.deviceText}>ipAddress: {ipAddress}</Text>
+        <Text style={styles.deviceText}>ipAddress: {ipaddress}</Text>
         <Text style={styles.deviceText}>instaceId: {instaceId}</Text>
         <Text style={styles.deviceText}>macAddress: {macAddress}</Text>
         <Text style={styles.deviceText}>modelName: {modelName}</Text>
