@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Dimensions,
   FlatList,
   Image,
   StyleSheet,
@@ -15,6 +16,7 @@ import {
 
 import axios from 'axios';
 import DeviceInfo from 'react-native-device-info';
+import { io } from 'socket.io-client';
 
 interface ImageItem {
   mediaId: string;
@@ -23,6 +25,9 @@ interface ImageItem {
 }
 
 const { apiUrl } = Constants.expoConfig?.extra ?? {};
+const socket = io(`${apiUrl}`, {
+  transports: ["websocket"],
+});
 
 export default function Index() {
   const router = useRouter();
@@ -35,66 +40,73 @@ export default function Index() {
   const [ip, setIp] = useState<string>("");
   const [networkstate, setNetworkState] = useState<string>("");
 
+  const { width, height } = Dimensions.get("screen");
+
   useEffect(() => {
     const registerDevice = async () => {
       try {
-        const getsn = DeviceInfo.getSerialNumberSync();
-        const sn =
-          !getsn || getsn.toLowerCase() === "unknown" ? "not allowed" : getsn;
+        const getSerial = DeviceInfo.getSerialNumberSync();
+        const serialNumber = !getSerial || getSerial.toLowerCase() === "unknown" ? "not allowed" : getSerial;
 
-        const deviceId = DeviceInfo.getDeviceId();
-        const deviceName = DeviceInfo.getDeviceNameSync();
-        const ipaddress = DeviceInfo.getIpAddressSync();
-        const instaceId = DeviceInfo.getInstanceIdSync();
-        const macAddress = DeviceInfo.getMacAddressSync();
-        const modelName = DeviceInfo.getModel();
-        const uniqueId = DeviceInfo.getUniqueIdSync();
+        const deviceInfo = {
+          serialNumber,
+          deviceId: DeviceInfo.getDeviceId(),
+          deviceOS: Device.osInternalBuildId ?? "unknown-device",
+          deviceName: DeviceInfo.getDeviceNameSync(),
+          name: Device.designName ?? "Unknown Device",
+          ipAddress: DeviceInfo.getIpAddressSync(),
+          instanceId: DeviceInfo.getInstanceIdSync(),
+          macAddress: DeviceInfo.getMacAddressSync(),
+          modelName: DeviceInfo.getModel(),
+          uniqueId: DeviceInfo.getUniqueIdSync(),
+        };
 
-        const ipAddress = await Network.getIpAddressAsync();
-        const networkinfo = await Network.getNetworkStateAsync();
+        const [ip, networkState] = await Promise.all([
+          Network.getIpAddressAsync(),
+          Network.getNetworkStateAsync(),
+        ]);
 
-        setNetworkState(String(networkinfo.isConnected));
-        setIp(ipAddress);
+        setNetworkState(String(networkState.isConnected));
+        setIp(ip);
 
         const info = {
-          serialNumber: sn,
-          deviceId: deviceId,
-          deviceOS: Device.osInternalBuildId ?? "unknown-device",
-          deviceName: deviceName,
-          name: Device.designName ?? "Unknown Device",
-          ip: ipAddress,
-          ipAddress: ipaddress,
-          instanceId: instaceId,
-          macAddress: macAddress,
-          modelName: modelName,
-          uniqueId: uniqueId,
+          ...deviceInfo,
+          ip,
           port: 3001,
           capabilities: ["video", "audio", "image"],
-          status: networkinfo.isConnected ? "online" : "offline",
+          status: networkState.isConnected ? "online" : "offline",
+          screenResolution: {
+            width: Math.round(width),
+            height: Math.round(height)
+          },
         };
+        console.log('info', info)
 
         setDeviceInfo(info);
 
-        const response = await axios.post(
-          `${apiUrl}/api/devices/register`,
-          info,
-          {
-            headers: { "Content-Type": "application/json" },
-          }
-        );
+        const response = await axios.post(`${apiUrl}/api/devices/register`, info, {
+          headers: { "Content-Type": "application/json" },
+        });
 
-        console.log("✅ Register success:", response.data);
+        socket.emit("register", info);
+
+        console.log("Register success:", response.data);
       } catch (err: any) {
-        if (axios.isAxiosError(err)) {
-          console.error("❌ Register failed:", err.response?.data || err.message);
+        if (err.response) {
+          console.error("Register failed:", err.response.status, err.response.data);
         } else {
-          console.error("❌ Register failed:", err);
+          console.error("Register failed:", err.message);
         }
       }
     };
 
     registerDevice();
-  }, [apiUrl]);
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
 
   useEffect(() => {
 
@@ -151,18 +163,16 @@ export default function Index() {
   return (
     <View style={{ flex: 1 }}>
       <View style={styles.deviceBox}>
-        <Text style={styles.deviceText}>Device: {deviceInfo.deviceId}</Text>
-        <Text style={styles.deviceText}>Model: {deviceInfo.name}</Text>
-        <Text style={styles.deviceText}>IP: {deviceInfo.ip}</Text>
-        <Text style={styles.deviceText}>Status: {networkstate ? 'online' : 'offline'}</Text>
-        <Text style={styles.deviceText}>sn: {sn}</Text>
-        <Text style={styles.deviceText}>deviceId: {deviceId}</Text>
-        <Text style={styles.deviceText}>deviceName: {deviceName}</Text>
-        <Text style={styles.deviceText}>ipAddress: {ipaddress}</Text>
-        <Text style={styles.deviceText}>instaceId: {instaceId}</Text>
-        <Text style={styles.deviceText}>macAddress: {macAddress}</Text>
-        <Text style={styles.deviceText}>modelName: {modelName}</Text>
-        <Text style={styles.deviceText}>uniqueId: {uniqueId}</Text>
+        <Text style={styles.deviceText}>Resolution: width: {Math.round(width)} / height: {Math.round(height)}</Text>
+        <Text style={styles.deviceText}>sn: {deviceInfo.sn}</Text>
+        <Text style={styles.deviceText}>DeviceID: {deviceInfo.deviceId}</Text>
+        <Text style={styles.deviceText}>DeviceOS: {deviceInfo.deviceOS}</Text>
+        <Text style={styles.deviceText}>DeviceName: {deviceInfo.deviceName}</Text>
+        <Text style={styles.deviceText}>IP: {deviceInfo.ipAddress}</Text>
+        <Text style={styles.deviceText}>InstanceId: {deviceInfo.instanceId}</Text>
+        <Text style={styles.deviceText}>MAC Address: {deviceInfo.macAddress}</Text>
+        <Text style={styles.deviceText}>Model Name: {deviceInfo.modelName}</Text>
+        <Text style={styles.deviceText}>UniqueID: {deviceInfo.uniqueId}</Text>
       </View>
 
       <FlatList
