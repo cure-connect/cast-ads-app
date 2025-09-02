@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 
+import axios from 'axios';
 import DeviceInfo from 'react-native-device-info';
 
 interface ImageItem {
@@ -20,6 +21,8 @@ interface ImageItem {
   name: string;
   url: string;
 }
+
+const { apiUrl } = Constants.expoConfig?.extra ?? {};
 
 export default function Index() {
   const router = useRouter();
@@ -32,13 +35,13 @@ export default function Index() {
   const [ip, setIp] = useState<string>("");
   const [networkstate, setNetworkState] = useState<string>("");
 
-  const { apiUrl } = Constants.expoConfig?.extra ?? {};
-
   useEffect(() => {
-    (async () => {
+    const registerDevice = async () => {
       try {
         const getsn = DeviceInfo.getSerialNumberSync();
-        const sn = !getsn || getsn.toLowerCase() === "unknown" ? "not allowed" : getsn;
+        const sn =
+          !getsn || getsn.toLowerCase() === "unknown" ? "not allowed" : getsn;
+
         const deviceId = DeviceInfo.getDeviceId();
         const deviceName = DeviceInfo.getDeviceNameSync();
         const ipaddress = DeviceInfo.getIpAddressSync();
@@ -53,8 +56,6 @@ export default function Index() {
         setNetworkState(String(networkinfo.isConnected));
         setIp(ipAddress);
 
-        console.log('sn', sn)
-
         const info = {
           serialNumber: sn,
           deviceId: deviceId,
@@ -63,32 +64,37 @@ export default function Index() {
           name: Device.designName ?? "Unknown Device",
           ip: ipAddress,
           ipAddress: ipaddress,
-          instaceId: instaceId,
+          instanceId: instaceId,
           macAddress: macAddress,
           modelName: modelName,
           uniqueId: uniqueId,
           port: 3001,
           capabilities: ["video", "audio", "image"],
-          status: networkstate ? "online" : "offline",
+          status: networkinfo.isConnected ? "online" : "offline",
         };
 
         setDeviceInfo(info);
 
-        const response = await fetch(`${apiUrl}/api/devices/register`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(info),
-        });
+        const response = await axios.post(
+          `${apiUrl}/api/devices/register`,
+          info,
+          {
+            headers: { "Content-Type": "application/json" },
+          }
+        );
 
-        const data = await response.json();
-        console.log("✅ Register success:", data);
-      } catch (err) {
-        console.error("❌ Register failed:", err);
+        console.log("✅ Register success:", response.data);
+      } catch (err: any) {
+        if (axios.isAxiosError(err)) {
+          console.error("❌ Register failed:", err.response?.data || err.message);
+        } else {
+          console.error("❌ Register failed:", err);
+        }
       }
-    })();
-  }, []);
+    };
+
+    registerDevice();
+  }, [apiUrl]);
 
   useEffect(() => {
 
