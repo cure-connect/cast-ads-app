@@ -41,6 +41,9 @@ export default function Index() {
   const [networkstate, setNetworkState] = useState<string>("");
 
   const { width, height } = Dimensions.get("screen");
+  const windowWidth = Dimensions.get('window').width;
+  const windowHeight = Dimensions.get('window').height;
+
 
   useEffect(() => {
     const registerDevice = async () => {
@@ -89,6 +92,11 @@ export default function Index() {
         });
 
         socket.emit("register", info);
+        socket.on("register", (data) => {
+          console.log("Received register event from server:", data);
+        });
+        socket.emit("cast");
+
 
         console.log("Register success:", response.data);
       } catch (err: any) {
@@ -163,8 +171,9 @@ export default function Index() {
   return (
     <View style={{ flex: 1 }}>
       <View style={styles.deviceBox}>
-        <Text style={styles.deviceText}>Resolution: width: {Math.round(width)} / height: {Math.round(height)}</Text>
-        <Text style={styles.deviceText}>sn: {deviceInfo.sn}</Text>
+        <Text style={styles.deviceText}>Resolution Screen: width: {Math.round(width)} / height: {Math.round(height)}</Text>
+        <Text style={styles.deviceText}>Resolition Window: width: {Math.round(windowWidth)} / height: {Math.round(windowHeight)}</Text>
+        <Text style={styles.deviceText}>sn: {deviceInfo.serialNumber}</Text>
         <Text style={styles.deviceText}>DeviceID: {deviceInfo.deviceId}</Text>
         <Text style={styles.deviceText}>DeviceOS: {deviceInfo.deviceOS}</Text>
         <Text style={styles.deviceText}>DeviceName: {deviceInfo.deviceName}</Text>
