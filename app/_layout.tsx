@@ -1,36 +1,12 @@
-import { AntDesign } from "@expo/vector-icons";
-import { router, Stack } from "expo-router";
-import { Pressable } from "react-native";
+import { Stack } from "expo-router";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
 export default function RootLayout() {
   return (
-    <Stack>
-      <Stack.Screen name="index" options={{ headerShown: false }} />
-      <Stack.Screen
-        name="images/image-preview"
-        options={{
-          headerShown: false,
-          title: '',
-          headerStyle: {
-            backgroundColor: '#fff',
-          },
-        }}
-      />
-      <Stack.Screen
-        name="images/images"
-        options={{
-          headerShown: true,
-          title: '',
-          headerLeft: () => (
-            <Pressable onPress={() => router.back()} style={{ marginLeft: 10 }}>
-              <AntDesign name="arrowleft" size={24} color="black" />
-            </Pressable>
-          ),
-          headerStyle: {
-            backgroundColor: '#fff',
-          },
-        }}
-      />
-    </Stack>
+    <SafeAreaProvider>
+      <SafeAreaView style={{ flex: 1}}>
+        <Stack screenOptions={{ headerShown: false }} />
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
