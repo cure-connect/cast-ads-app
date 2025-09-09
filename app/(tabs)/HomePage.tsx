@@ -4,25 +4,35 @@ import * as Network from "expo-network";
 import { SplashScreen, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
     Dimensions,
     FlatList,
     Image,
     StyleSheet,
     Text,
     TouchableOpacity,
-    View,
+    View
 } from "react-native";
 
 import axios from "axios";
 import DeviceInfo from "react-native-device-info";
 import { io, Socket } from "socket.io-client";
-import CustomButton from "../../src/components/CustomButton";
 
 interface ImageItem {
     mediaId: string;
     name: string;
     url: string;
+}
+
+interface PlaybackOptions {
+    autoplay?: boolean;
+    volume?: number;
+    startTime?: number;
+    loop?: boolean;
+}
+
+interface MediaFile {
+    type: "image" | "video" | "audio";
+    files: string[];
 }
 
 const { apiUrl } = Constants.expoConfig?.extra ?? {};
@@ -31,14 +41,18 @@ let socket: Socket;
 export default function HomePage() {
     const router = useRouter();
 
-    const [images, setImages] = useState<ImageItem[]>([]);
-    const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
 
     const [deviceInfo, setDeviceInfo] = useState<any>({});
     const { width, height } = Dimensions.get("screen");
     const windowWidth = Dimensions.get("window").width;
     const windowHeight = Dimensions.get("window").height;
+
+    const [slideshow, setSlideshow] = useState<string[]>([]);
+    const [currentIndex, setCurrentIndex] = useState<number>(0);
+    const [autoplay, setAutoplay] = useState<boolean>(false);
+
+    const [mediaList, setMediaList] = useState<MediaFile[]>([]);
 
     useEffect(() => {
         SplashScreen.hideAsync();
@@ -98,19 +112,39 @@ export default function HomePage() {
 
                 socket.on("connect", () => {
                     console.log("Socket connected:", socket.id);
-                    socket.emit("register", info);
+                    socket.emit("device:register", info);
+                    socket.emit("device:stimulate", deviceData.deviceId)
+                    socket.emit("device:status", { deviceId: deviceData.deviceId, status: "online" })
                 });
 
-                socket.on("cast", (data) => {
-                    console.log("Received cast event:", data);
+                socket.on("devices:updated", (devices) => {
+                    console.log("Devices updated", devices)
+                })
+
+                socket.on("media:play", (mediaFile: MediaFile, options: PlaybackOptions) => {
+                    console.log("Media File", mediaFile);
+                    console.log("Options", options);
+
+                    if (mediaFile.type === "image" && Array.isArray(mediaFile.files)) {
+                        setSlideshow(mediaFile.files);
+                        setCurrentIndex(0);
+                        setAutoplay(options.autoplay ?? false);
+                    }
+
+                    setMediaList((prev) => [...prev, mediaFile]);
                 });
+
+
+                socket.on("playback:command", (control) => {
+                    console.log("Playback Command", control)
+                })
 
                 socket.on("disconnect", () => {
                     console.log("Socket disconnected");
                 });
 
-                socket.on("error", (err) => {
-                    console.error("Socket error:", err.message);
+                socket.on("error", (message) => {
+                    console.log("Socket error:", message);
                 });
             } catch (err: any) {
                 if (err.response) {
@@ -135,38 +169,30 @@ export default function HomePage() {
         };
     }, []);
 
-    useEffect(() => {
-        const fetchImages = async () => {
-            try {
-                const response = await fetch(`${apiUrl}/api/media`);
-                const result = await response.json();
-                const data: ImageItem[] = result.data.map((item: any) => ({
-                    mediaId: item.mediaId,
-                    name: item.name,
-                    url: item.url,
-                }));
-                setImages(data);
-            } catch (err: any) {
-                console.error(err);
-                setError("ไม่สามารถโหลดรูปภาพได้");
-            } finally {
-                setLoading(false);
-            }
-        };
+    // useEffect(() => {
+    //     const fetchImages = async () => {
+    //         try {
+    //             const response = await fetch(`${apiUrl}/api/media`);
+    //             const result = await response.json();
+    //             const data: ImageItem[] = result.data.map((item: any) => ({
+    //                 mediaId: item.mediaId,
+    //                 name: item.name,
+    //                 url: item.url,
+    //             }));
+    //             setImages(data);
+    //         } catch (err: any) {
+    //             console.error(err);
+    //             setError("ไม่สามารถโหลดรูปภาพได้");
+    //         } finally {
+    //             setLoading(false);
+    //         }
+    //     };
 
-        fetchImages();
-        const intervalId = setInterval(fetchImages, 5000);
+    //     fetchImages();
+    //     const intervalId = setInterval(fetchImages, 5000);
 
-        return () => clearInterval(intervalId);
-    }, []);
-
-    if (loading) {
-        return (
-            <View style={styles.center}>
-                <ActivityIndicator size="large" color="#0000ff" />
-            </View>
-        );
-    }
+    //     return () => clearInterval(intervalId);
+    // }, []);
 
     if (error) {
         return (
@@ -178,13 +204,6 @@ export default function HomePage() {
 
     return (
         <View style={{ flex: 1 }}>
-            <CustomButton
-                title={"test"}
-                onPress={() => {
-                    socket.emit("cast", { type: "image", url: "test.jpg" });
-                    console.log("test");
-                }}
-            />
 
             <View style={styles.deviceBox}>
                 <Text style={styles.deviceText}>
@@ -205,29 +224,30 @@ export default function HomePage() {
                 <Text style={styles.deviceText}>Model Name: {deviceInfo.modelName}</Text>
                 <Text style={styles.deviceText}>UniqueID: {deviceInfo.uniqueId}</Text>
             </View>
-
             <FlatList
-                data={images}
-                keyExtractor={(item) => item.mediaId}
+                data={mediaList}
+                keyExtractor={(_, index) => index.toString()}
                 renderItem={({ item }) => (
                     <TouchableOpacity
                         style={styles.item}
-                        onPress={() =>
-                            router.push({
-                                pathname: "/image-preview",
-                                params: { url: item.url },
-                            })
-                        }
+                        onPress={() => {
+                            if (item.type === "image") {
+                                setSlideshow(item.files);
+                                setCurrentIndex(0);
+                                setAutoplay(true);
+                            }
+                        }}
                     >
                         <Image
-                            source={{ uri: item.url }}
+                            source={{ uri: item.files[0] }}
                             style={styles.image}
                             resizeMode="cover"
                         />
-                        <Text style={styles.text}>{item.name}</Text>
+                        <Text style={styles.text}>{item.type}</Text>
                     </TouchableOpacity>
                 )}
             />
+
         </View>
     );
 }
