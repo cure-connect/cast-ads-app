@@ -14,9 +14,9 @@ import {
     View,
 } from "react-native";
 
-import axios from 'axios';
-import DeviceInfo from 'react-native-device-info';
-import { io } from 'socket.io-client';
+import axios from "axios";
+import DeviceInfo from "react-native-device-info";
+import { io, Socket } from "socket.io-client";
 import CustomButton from "../../src/components/CustomButton";
 
 interface ImageItem {
@@ -26,9 +26,7 @@ interface ImageItem {
 }
 
 const { apiUrl } = Constants.expoConfig?.extra ?? {};
-const socket = io(`${apiUrl}`, {
-    transports: ["websocket"],
-});
+let socket: Socket;
 
 export default function HomePage() {
     const router = useRouter();
@@ -38,26 +36,24 @@ export default function HomePage() {
     const [error, setError] = useState<string | null>(null);
 
     const [deviceInfo, setDeviceInfo] = useState<any>({});
-    const [ip, setIp] = useState<string>("");
-    const [networkstate, setNetworkState] = useState<string>("");
-
     const { width, height } = Dimensions.get("screen");
-    const windowWidth = Dimensions.get('window').width;
-    const windowHeight = Dimensions.get('window').height;
+    const windowWidth = Dimensions.get("window").width;
+    const windowHeight = Dimensions.get("window").height;
 
     useEffect(() => {
         SplashScreen.hideAsync();
     }, []);
 
-
-
     useEffect(() => {
         const registerDevice = async () => {
             try {
                 const getSerial = DeviceInfo.getSerialNumberSync();
-                const serialNumber = !getSerial || getSerial.toLowerCase() === "unknown" ? "not allowed" : getSerial;
+                const serialNumber =
+                    !getSerial || getSerial.toLowerCase() === "unknown"
+                        ? "not allowed"
+                        : getSerial;
 
-                const deviceInfo = {
+                const deviceData = {
                     serialNumber,
                     deviceId: DeviceInfo.getDeviceId(),
                     deviceOS: Device.osInternalBuildId ?? "unknown-device",
@@ -75,42 +71,54 @@ export default function HomePage() {
                     Network.getNetworkStateAsync(),
                 ]);
 
-                setNetworkState(String(networkState.isConnected));
-                setIp(ip);
-
                 const info = {
-                    ...deviceInfo,
+                    ...deviceData,
                     ip,
                     port: 3001,
                     capabilities: ["video", "audio", "image"],
                     status: networkState.isConnected ? "online" : "offline",
                     screenResolution: {
                         width: Math.round(width),
-                        height: Math.round(height)
+                        height: Math.round(height),
                     },
                 };
-                console.log('info', info)
 
                 setDeviceInfo(info);
 
-                const response = await axios.post(`${apiUrl}/api/devices/register`, info, {
+                await axios.post(`${apiUrl}/api/devices/register`, info, {
                     headers: { "Content-Type": "application/json" },
                 });
 
-                socket.emit("register", info);
-                socket.on("register", (data) => {
-                    console.log("Received register event from server:", data);
+                socket = io(`${apiUrl}`, {
+                    transports: ["websocket"],
+                    reconnection: true,
+                    reconnectionAttempts: 5,
+                    reconnectionDelay: 2000,
                 });
-                socket.on("error", (message) => {
-                    console.log("Received error", message);
-                })
-                socket.emit("cast");
 
+                socket.on("connect", () => {
+                    console.log("Socket connected:", socket.id);
+                    socket.emit("register", info);
+                });
 
-                console.log("Register success:", response.data);
+                socket.on("cast", (data) => {
+                    console.log("Received cast event:", data);
+                });
+
+                socket.on("disconnect", () => {
+                    console.log("Socket disconnected");
+                });
+
+                socket.on("error", (err) => {
+                    console.error("Socket error:", err.message);
+                });
             } catch (err: any) {
                 if (err.response) {
-                    console.error("Register failed:", err.response.status, err.response.data);
+                    console.error(
+                        "Register failed:",
+                        err.response.status,
+                        err.response.data
+                    );
                 } else {
                     console.error("Register failed:", err.message);
                 }
@@ -120,13 +128,14 @@ export default function HomePage() {
         registerDevice();
 
         return () => {
-            socket.disconnect();
+            if (socket) {
+                socket.disconnect();
+                console.log("Socket disconnected");
+            }
         };
     }, []);
 
-
     useEffect(() => {
-
         const fetchImages = async () => {
             try {
                 const response = await fetch(`${apiUrl}/api/media`);
@@ -167,24 +176,25 @@ export default function HomePage() {
         );
     }
 
-    const getsn = DeviceInfo.getSerialNumberSync();
-    const sn = !getsn || getsn.toLowerCase() === "unknown" ? "not allowed" : getsn;
-    const deviceId = DeviceInfo.getDeviceId();
-    const deviceName = DeviceInfo.getDeviceNameSync();
-    const ipaddress = DeviceInfo.getIpAddressSync();
-    const instaceId = DeviceInfo.getInstanceIdSync();
-    const macAddress = DeviceInfo.getMacAddressSync();
-    const modelName = DeviceInfo.getModel();
-    const uniqueId = DeviceInfo.getUniqueIdSync();
-
     return (
         <View style={{ flex: 1 }}>
-            <CustomButton title={"test"} onPress={function (): void {
-                console.log("test import")
-            }} />
+            <CustomButton
+                title={"test"}
+                onPress={() => {
+                    socket.emit("cast", { type: "image", url: "test.jpg" });
+                    console.log("test");
+                }}
+            />
+
             <View style={styles.deviceBox}>
-                <Text style={styles.deviceText}>Resolution Screen: width: {Math.round(width)} / height: {Math.round(height)}</Text>
-                <Text style={styles.deviceText}>Resolition Window: width: {Math.round(windowWidth)} / height: {Math.round(windowHeight)}</Text>
+                <Text style={styles.deviceText}>
+                    Resolution Screen: width: {Math.round(width)} / height:{" "}
+                    {Math.round(height)}
+                </Text>
+                <Text style={styles.deviceText}>
+                    Resolition Window: width: {Math.round(windowWidth)} / height:{" "}
+                    {Math.round(windowHeight)}
+                </Text>
                 <Text style={styles.deviceText}>sn: {deviceInfo.serialNumber}</Text>
                 <Text style={styles.deviceText}>DeviceID: {deviceInfo.deviceId}</Text>
                 <Text style={styles.deviceText}>DeviceOS: {deviceInfo.deviceOS}</Text>
@@ -228,7 +238,7 @@ const styles = StyleSheet.create({
         padding: 15,
         borderBottomWidth: 1,
         borderBottomColor: "#ddd",
-        marginTop: 50
+        marginTop: 50,
     },
     deviceText: {
         fontSize: 14,
