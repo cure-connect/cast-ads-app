@@ -29,8 +29,10 @@ interface PlaybackOptions {
     startTime?: number;
     loop?: boolean;
 }
-
 interface MediaFile {
+    mediaId: string;
+    name: string;
+    url: string;
     type: "image" | "video" | "audio";
     files: string[];
 }
@@ -125,18 +127,35 @@ export default function HomePage() {
                     console.log("Media File", mediaFile);
                     console.log("Options", options);
 
-                    if (mediaFile.type === "image" && Array.isArray(mediaFile.files)) {
-                        setSlideshow(mediaFile.files);
-                        setCurrentIndex(0);
-                        setAutoplay(options.autoplay ?? false);
-                    }
+                    // if (mediaFile.type === "image" && Array.isArray(mediaFile.files)) {
+                    //     setSlideshow(mediaFile.files);
+                    //     setCurrentIndex(0);
+                    //     setAutoplay(options.autoplay ?? false);
+                    // }
 
-                    setMediaList((prev) => [...prev, mediaFile]);
+                    // setMediaList((prev) => [...prev, mediaFile]);
+                    if (mediaFile.type === 'image') {
+                        router.push({
+                            pathname: "/image-preview",
+                            params: {
+                                url: mediaFile.url,
+                                name: mediaFile.name,
+                                autoplay: options?.autoplay ? 'true' : 'false'
+                            },
+                        });
+                    }
                 });
 
 
                 socket.on("playback:command", (control) => {
                     console.log("Playback Command", control)
+                    switch (control.action) {
+                        case 'stop':
+                            console.log('playback: ',control.action)
+                            socket.emit('device:status', deviceData.deviceId, 'online');
+                            router.replace('/');
+                            break;
+                    }
                 })
 
                 socket.on("disconnect", () => {
