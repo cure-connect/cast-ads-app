@@ -10,8 +10,7 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.myapp"
+      "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
@@ -42,6 +41,14 @@
         {
           "supportsBackgroundPlayback": true,
           "supportsPictureInPicture": true
+        }
+      ],
+      [
+        "expo-env",
+        {
+          "variables": {
+            "API_URL": "http://141.98.17.189:3004"
+          }
         }
       ]
     ],
