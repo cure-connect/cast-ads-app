@@ -52,6 +52,8 @@ export default function HomePage() {
         player.play();
     });
 
+    
+
     useEffect(() => {
         SplashScreen.hideAsync();
     }, []);
