@@ -20,6 +20,9 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import DeviceInfo from "react-native-device-info";
 import { io, Socket } from "socket.io-client";
 
+import { Roboto_400Regular, Roboto_500Medium, Roboto_700Bold, useFonts } from "@expo-google-fonts/roboto";
+import AppLoading from "expo-app-loading";
+
 interface PlaybackOptions {
     autoplay?: boolean;
     volume?: number;
@@ -46,13 +49,17 @@ export default function HomePage() {
 
     const { width, height } = Dimensions.get("screen");
 
+    const [fontsLoaded] = useFonts({
+        Roboto_400Regular,
+        Roboto_500Medium,
+        Roboto_700Bold,
+    });
+
     const player = useVideoPlayer(BackgroundVideo, (player) => {
         player.loop = true;
         player.muted = true;
         player.play();
     });
-
-    
 
     useEffect(() => {
         SplashScreen.hideAsync();
@@ -121,6 +128,10 @@ export default function HomePage() {
                         status: "online",
                     });
                 });
+
+                socket.on("devices:updated", (devices) => {
+                    console.log("Devices updated: ", devices)
+                })
 
                 socket.on("media:play", async (mediaFile: MediaFile, options: PlaybackOptions) => {
                     let mediaUri = mediaFile.url;
@@ -198,6 +209,10 @@ export default function HomePage() {
         };
     }, []);
 
+    if (!fontsLoaded) {
+        return <AppLoading />;
+    }
+
     if (error) {
         return (
             <View style={styles.errorContainer}>
@@ -209,7 +224,6 @@ export default function HomePage() {
     return (
         <View style={styles.container} pointerEvents="box-none">
             <StatusBar hidden />
-
 
             <View style={StyleSheet.absoluteFill} pointerEvents="none">
                 <VideoView
@@ -228,8 +242,8 @@ export default function HomePage() {
                             <Text style={styles.tagline}>Digital Signage System</Text>
                         </View>
                     </View>
-
                 </View>
+
                 <View style={styles.bottomContent}>
                     <View style={styles.qrContainer}>
                         <View style={styles.qrCodeBox}>
@@ -281,10 +295,9 @@ const styles = StyleSheet.create({
         resizeMode: 'contain',
         marginRight: 10,
     },
-
     brandText: {
         fontSize: 36,
-        fontWeight: '700',
+        fontFamily: "Roboto_700Regular",
         color: '#FFFFFF',
         letterSpacing: 2,
         textShadowColor: 'rgba(0, 0, 0, 0.1)',
@@ -293,7 +306,7 @@ const styles = StyleSheet.create({
     },
     tagline: {
         fontSize: 16,
-        fontWeight: '400',
+        fontFamily: "Roboto_400Regular",
         color: 'rgba(255, 255, 255, 0.9)',
         letterSpacing: 0.5,
         marginTop: 2,
@@ -311,8 +324,8 @@ const styles = StyleSheet.create({
     qrCodeBox: {
         width: 100,
         height: 100,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 8,
+        backgroundColor: '#e1d9d9ff',
+        borderRadius: 10,
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: '#000',
@@ -320,19 +333,20 @@ const styles = StyleSheet.create({
             width: 0,
             height: 2,
         },
-        shadowOpacity: 0.1,
+        shadowOpacity: 1,
         shadowRadius: 4,
         elevation: 3,
     },
     qrPlaceholder: {
         fontSize: 10,
         color: '#999999',
-        fontWeight: '300',
+        fontFamily: "Roboto_400Regular",
     },
     qrText: {
         fontSize: 12,
         color: '#666666',
         marginTop: 8,
+        fontFamily: "Roboto_400Regular",
     },
     statusContainer: {
         flexDirection: 'row',
@@ -355,7 +369,7 @@ const styles = StyleSheet.create({
     statusText: {
         fontSize: 14,
         color: '#333333',
-        fontWeight: '500',
+        fontFamily: "Roboto_500Medium",
     },
     errorContainer: {
         flex: 1,
@@ -368,5 +382,6 @@ const styles = StyleSheet.create({
         color: '#F87171',
         textAlign: 'center',
         paddingHorizontal: 20,
+        fontFamily: "Roboto_400Regular",
     },
 });
