@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from "expo-constants";
 import * as Device from "expo-device";
 import * as Network from "expo-network";
@@ -25,7 +24,6 @@ import { Roboto_400Regular, Roboto_500Medium, Roboto_700Bold, useFonts } from "@
 import AppLoading from "expo-app-loading";
 
 import { cleanupCache } from '@/src/utils/localStorage';
-
 
 interface ImageItem {
     mediaId: string;
@@ -70,22 +68,6 @@ export default function HomePage() {
     const [isRegistered, setIsRegistered] = useState<boolean>(false);
     const [currentMedia, setCurrentMedia] = useState<MediaFile | null>(null);
 
-    const navigatePendingRef = useRef(false);
-
-    const lastMediaIdRef = useRef<string | null>(null);
-    const navigationTimeoutRef = useRef<number | null>(null);
-
-    const isInitializingRef = useRef(false);
-    const hasInitializedRef = useRef(false);
-
-    const [currentMediaId, setCurrentMediaId] = useState<string | null>(null);
-    const [isNavigating, setIsNavigating] = useState<boolean>(false);
-
-    const [hasRegistered, setHasRegistered] = useState(false);
-    const isRegisteringRef = useRef(false);
-
-    const busyIntervalRef = useRef<number | null>(null); // Interval emit 'busy' ทุก 30s
-
     const socketRef = useRef<Socket | null>(null);
     const stimulateIntervalRef = useRef<number | null>(null);
     const deviceIdRef = useRef<string>('');
@@ -99,51 +81,6 @@ export default function HomePage() {
         Roboto_500Medium,
         Roboto_700Bold,
     });
-
-    useEffect(() => {
-        if (currentMediaId && socketRef.current?.connected) {
-            console.log('⏰ Start busy keep-alive interval for media:', currentMediaId);
-            busyIntervalRef.current = setInterval(() => {
-                socketRef.current?.emit('device:status', deviceIdRef.current, 'busy');
-                console.log('🔄 Emitted busy status keep-alive');
-            }, 30000); // ทุก 30s
-
-            return () => {
-                if (busyIntervalRef.current) {
-                    clearInterval(busyIntervalRef.current);
-                    busyIntervalRef.current = null;
-                    console.log('🛑 Stopped busy keep-alive');
-                }
-            };
-        } else if (!currentMediaId && busyIntervalRef.current) {
-            clearInterval(busyIntervalRef.current);
-            busyIntervalRef.current = null;
-            // Emit 'online' เฉพาะตอน clear media (e.g., stop)
-            if (socketRef.current?.connected) {
-                socketRef.current.emit('device:status', deviceIdRef.current, 'online');
-                console.log('✅ Emitted online after media clear');
-            }
-        }
-    }, [currentMediaId]); // Depend on currentMediaId change
-
-    // ✅ useEffect: Aggressive stimulate ทุก 10s เพื่อป้องกัน offline (แก้ประเด็น 2)
-    useEffect(() => {
-        if (socketRef.current?.connected && !stimulateIntervalRef.current) {
-            console.log('📡 Start stimulate interval (10s)');
-            stimulateIntervalRef.current = setInterval(() => {
-                socketRef.current?.emit('device:stimulate', deviceIdRef.current);
-                console.log('📡 Sent stimulate to keep online');
-            }, 10000); // ทุก 10s (แทน 60s ใน backend)
-
-            return () => {
-                if (stimulateIntervalRef.current) {
-                    clearInterval(stimulateIntervalRef.current);
-                    stimulateIntervalRef.current = null;
-                    console.log('🛑 Stopped stimulate interval');
-                }
-            };
-        }
-    }, [socketRef.current?.connected]); // Re-start ถ้า reconnect
 
     // จัดการ App State สำหรับ background/foreground
     useEffect(() => {
@@ -165,29 +102,15 @@ export default function HomePage() {
         return () => subscription?.remove();
     }, []);
 
+    // websocket functions
     const initializeWebSocket = () => {
-        // ✅ ป้องกันการสร้าง socket ซ้ำ
-        if (isInitializingRef.current) {
-            console.log('⚠️ Socket initialization already in progress, skipping...');
-            return;
-        }
-
-        if (socketRef.current?.connected) {
-            console.log('⚠️ Socket already connected, skipping initialization');
-            return;
-        }
-
-        isInitializingRef.current = true;
-        console.log('Initializing WebSocket connection...');
-        setConnectionStatus('Connecting...');
-
         // ปิด connection เดิมก่อน (ถ้ามี)
         if (socketRef.current) {
-            console.log('Closing existing socket...');
-            socketRef.current.removeAllListeners(); // ✅ ลบ listeners ทั้งหมด
             socketRef.current.disconnect();
-            socketRef.current = null;
         }
+
+        console.log('Initializing WebSocket connection...');
+        setConnectionStatus('Connecting...');
 
         const socket = io(`${apiUrl}`, {
             transports: ["websocket", "polling"],
@@ -204,14 +127,7 @@ export default function HomePage() {
         socketRef.current = socket;
         setupSocketEventListeners(socket);
 
-        return () => {
-            console.log('🧹 Socket cleanup - off listeners');
-            if (socketRef.current) {
-                socketRef.current.removeAllListeners();
-                // Optional: socketRef.current.disconnect();
-            }
-            navigatePendingRef.current = false;
-        };
+        return socket;
     };
 
     const setupSocketEventListeners = (socket: Socket) => {
@@ -220,7 +136,6 @@ export default function HomePage() {
             setIsConnected(true);
             setConnectionStatus('Connected');
             setError(null);
-            isInitializingRef.current = false; // ✅ Reset flag
 
             // Clear any reconnect timeout
             if (reconnectTimeoutRef.current) {
@@ -237,21 +152,13 @@ export default function HomePage() {
             setIsRegistered(false);
             setConnectionStatus(`Disconnected: ${reason}`);
             stopStimulate();
-            isInitializingRef.current = false; // ✅ Reset flag
-
-            // ✅ ลบ listeners เพื่อป้องกัน memory leak
-            socket.off('media:play');
-            socket.off('playback:command');
 
             // Auto-reconnect after 5 seconds for certain disconnect reasons
             if (reason === 'io server disconnect' || reason === 'transport close') {
-                if (!reconnectTimeoutRef.current) { // ✅ ป้องกัน multiple reconnect
-                    reconnectTimeoutRef.current = setTimeout(() => {
-                        console.log('Attempting to reconnect...');
-                        reconnectTimeoutRef.current = null;
-                        initializeWebSocket();
-                    }, 5000);
-                }
+                reconnectTimeoutRef.current = setTimeout(() => {
+                    console.log('Attempting to reconnect...');
+                    initializeWebSocket();
+                }, 5000);
             }
         });
 
@@ -267,8 +174,6 @@ export default function HomePage() {
             if (response && response.success) {
                 console.log('Device registered successfully!');
                 setIsRegistered(true);
-                setHasRegistered(true); // Mark as registered
-                isRegisteringRef.current = false; // Reset flag
                 setConnectionStatus('Device Registered');
                 startStimulate();
 
@@ -276,63 +181,36 @@ export default function HomePage() {
                 cleanupCache();
             } else {
                 console.error('Device registration failed:', response);
-                isRegisteringRef.current = false; // Reset flag
                 setConnectionStatus('Registration Failed');
                 Alert.alert('Registration Failed', response?.error || 'Unknown error');
             }
         });
 
-        socket.on('media:play', (data: any) => {
-            const mediaFile = data.mediaFile || data;
-            const options = data.options || {};
-
+        socket.on('media:play', (mediaFile: MediaFile, options?: PlaybackOptions) => {
             console.log('Media play command received:', mediaFile);
             console.log('Playback options:', options);
 
-            // ป้องกันการ navigate ซ้ำ
-            if (isNavigating) {
-                console.log('⚠️ Already navigating, skip duplicate event');
-                return;
-            }
-
-            // ป้องกัน event เดียวกันที่มาติดๆ กัน
-            if (lastMediaIdRef.current === mediaFile.mediaId) {
-                console.log('⚠️ Same media received recently, skip');
-                return;
-            }
-
-            // เคลียร์ timeout เดิม
-            if (navigationTimeoutRef.current) {
-                clearTimeout(navigationTimeoutRef.current);
-            }
-
-            lastMediaIdRef.current = mediaFile.mediaId;
-            setCurrentMediaId(mediaFile.mediaId);
             setCurrentMedia(mediaFile);
             setConnectionStatus('Playing Media');
-            setIsNavigating(true);
 
             socket.emit('device:status', deviceIdRef.current, 'busy');
 
-            // Navigate
+            // เล่นวิดีโอจาก URL โดยตรง ไม่ต้องดาวน์โหลดก่อน
             if (mediaFile.type === 'image') {
-                console.log('📷 Navigating to image preview:', mediaFile.url);
                 router.push({
                     pathname: "/image-preview",
                     params: {
                         url: mediaFile.url,
-                        mediaId: mediaFile.mediaId,
                         name: mediaFile.name,
                         autoplay: options?.autoplay ? 'true' : 'false'
                     },
                 });
             } else if (mediaFile.type === 'video') {
-                console.log('🎬 Navigating to video player:', mediaFile.url);
+                console.log('Playing video directly from URL:', mediaFile.url);
                 router.push({
                     pathname: "/video-player",
                     params: {
                         url: mediaFile.url,
-                        mediaId: mediaFile.mediaId,
                         name: mediaFile.name,
                         type: 'video',
                         autoplay: options?.autoplay ? 'true' : 'false',
@@ -340,26 +218,13 @@ export default function HomePage() {
                         startTime: options?.startTime?.toString() || '0'
                     },
                 });
-                // router.replace({
-                //     pathname: "/video-player",
-                //     params: {
-                //         url: mediaFile.url,
-                //         mediaId: mediaFile.mediaId,
-                //         name: mediaFile.name,
-                //         type: 'video',
-                //         autoplay: options?.autoplay ? 'true' : 'false',
-                //         volume: options?.volume?.toString() || '80',
-                //         startTime: options?.startTime?.toString() || '0'
-                //     },
-                // });
+            } else {
+                Alert.alert(
+                    'Media Received',
+                    `Playing: ${mediaFile.name}\nType: ${mediaFile.type}`,
+                    [{ text: 'OK' }]
+                );
             }
-
-            // Reset navigation flag
-            navigationTimeoutRef.current = setTimeout(() => {
-                setIsNavigating(false);
-                lastMediaIdRef.current = null;
-                console.log('✅ Navigation lock released');
-            }, 2000);
         });
 
         socket.on('playback:command', (control: PlaybackControl) => {
@@ -373,61 +238,12 @@ export default function HomePage() {
                     console.log('⏸️ Pause command');
                     break;
                 case 'stop':
-                    // ✅ ป้องกัน multiple stop commands
-                    // if (navigationTimeoutRef.current) {
-                    //     clearTimeout(navigationTimeoutRef.current);
-                    //     navigationTimeoutRef.current = null;
-                    // }
-
-                    // console.log('⏹️ Stop command');
-                    // setCurrentMedia(null);
-                    // setCurrentMediaId(null);
-                    // setIsNavigating(false);
-                    // lastMediaIdRef.current = null;
-                    // setConnectionStatus('Device Online');
-                    // socketRef.current?.emit('device:status', deviceIdRef.current, 'online');
-
-                    // // ✅ Navigate เพียงครั้งเดียว
-                    // setTimeout(() => {
-                    //     router.push('/');
-                    //     console.log('✅ Navigated back to home');
-                    // }, 300);
+                    console.log('⏹️ Stop command');
                     setCurrentMedia(null);
-                    setCurrentMediaId(null);
-                    socket.emit('device:status', deviceIdRef.current, 'online');
-                    setConnectionStatus('Ready');
-
-                    try {
-                        router.dismissAll(); // Pop all layers back to root
-                        // หรือถ้า root เป็น tabs: router.replace('/(tabs)/home');
-                        console.log('🧹 Full stack cleared after stop');
-                    } catch (err) {
-                        console.error('🚨 Dismiss error:', err);
-                        router.replace('/'); // Fallback to root
-                    }
+                    setConnectionStatus('Device Online');
+                    socketRef.current?.emit('device:status', deviceIdRef.current, 'online');
+                    router.replace('/');
                     break;
-
-                // case 'stop':
-                //     console.log('⏹️ Stop command received from backend');
-
-                //     setCurrentMedia(null);
-                //     setCurrentMediaId(null);
-                //     setIsNavigating(false);
-                //     lastMediaIdRef.current = null;
-                //     setConnectionStatus('Device Online');
-
-                //     // ✅ ส่งสถานะกลับ backend ทันที
-                //     socket.emit('device:status', deviceIdRef.current, 'online');
-
-                //     try {
-                //         router.replace('/');
-                //         console.log('✅ Navigated back to home safely');
-                //     } catch (err) {
-                //         console.error('🚨 Navigation error:', err);
-                //         router.replace('/(tabs)/HomePage'); // fallback
-                //     }
-                //     break;
-                
                 case 'seek':
                     console.log('Seek to:', control.value);
                     break;
@@ -437,46 +253,8 @@ export default function HomePage() {
             }
         });
 
-        // socket.on('devices:updated', (devices) => {
-        //     console.log('Devices list updated:', devices.length, 'devices');
-        // });
-
-        // 🔥 เพิ่ม listener สำหรับ device:updated (อัปเดตชื่อแบบ real-time)
-        socket.on('device:updated', async (updatedDevice) => {
-            console.log('📱 Device update received:', updatedDevice);
-
-            // ตรวจสอบว่าเป็น device ของเราหรือไม่
-            if (updatedDevice.deviceId === deviceIdRef.current) {
-                console.log('✅ This is our device! Updating info...');
-                console.log('   Old name:', deviceInfo.deviceName);
-                console.log('   New name:', updatedDevice.deviceName);
-                console.log('   IP:', updatedDevice.ipAddress);
-
-                // อัปเดต deviceInfo state
-                setDeviceInfo((prev: any) => ({
-                    ...prev,
-                    deviceName: updatedDevice.deviceName,
-                    ipAddress: updatedDevice.ipAddress || prev.ipAddress,
-                    status: updatedDevice.status || prev.status,
-                }));
-
-                // อัปเดต IP state ด้วย (ถ้ามี)
-                if (updatedDevice.ipAddress) {
-                    setIp(updatedDevice.ipAddress);
-                }
-
-                // 🔥 บันทึกชื่อลง AsyncStorage เพื่อให้คงอยู่
-                try {
-                    await AsyncStorage.setItem('customDeviceName', updatedDevice.deviceName);
-                    console.log('✅ Device name saved to storage:', updatedDevice.deviceName);
-                } catch (error) {
-                    console.error('❌ Failed to save device name:', error);
-                }
-
-                console.log('✅ Device info updated successfully!');
-            } else {
-                console.log('ℹ️ Update for different device:', updatedDevice.deviceId);
-            }
+        socket.on('devices:updated', (devices) => {
+            console.log('Devices list updated:', devices.length, 'devices');
         });
 
         socket.on('error', (message) => {
@@ -513,87 +291,34 @@ export default function HomePage() {
             });
         });
 
+        // เพิ่ม listener สำหรับ playlist:stop
         socket.on('playlist:stop', () => {
-            console.log('⏹️ Playlist stop command received');
-
-            // 1. Update local state
+            console.log('Playlist stop command received');
             setCurrentMedia(null);
             setConnectionStatus('Device Online');
-
-            // 2. ✅ ส่ง status update กลับไป Backend
-            if (socketRef.current?.connected) {
-                socketRef.current.emit('device:status', deviceIdRef.current, 'online');
-
-                // 3. ✅ ส่ง event บอก Backend ว่า playlist หยุดแล้ว
-                socketRef.current.emit('playlist:stopped', {
-                    deviceId: deviceIdRef.current,
-                    timestamp: new Date().toISOString(),
-                });
-
-                console.log('✅ Sent playlist:stopped event to backend');
-            }
-
-            // 4. Navigate back to home
-            setTimeout(() => {
-                router.back(); // หรือ router.replace('/') ถ้าต้องการ
-            }, 100);
+            socketRef.current?.emit('device:status', deviceIdRef.current, 'online');
+            router.replace('/');
         });
+
     };
 
-    const registerDeviceViaSocket = async () => {
+    const registerDeviceViaSocket = () => {
         if (!socketRef.current || !socketRef.current.connected) {
             console.error('Socket not connected');
             return;
         }
 
-        if (isRegisteringRef.current || hasRegistered) {
-            console.log('Already registered or registering, skip');
-            return;
-        }
-
-        isRegisteringRef.current = true;
-
         console.log('Registering device via WebSocket...');
         setConnectionStatus('Registering Device...');
-
-        // 🔥 ดึง IP ใหม่ทุกครั้งเพื่อป้องกัน race condition
-        let currentIp = ip; // ใช้จาก state ก่อน
-
-        try {
-            const freshIp = await Network.getIpAddressAsync();
-            console.log('🌐 Fresh IP from network:', freshIp);
-
-            if (freshIp && freshIp !== '0.0.0.0') {
-                currentIp = freshIp;
-                setIp(freshIp); // อัปเดต state
-            }
-        } catch (error) {
-            console.warn('⚠️ Failed to get fresh IP, using state IP:', ip);
-        }
-
-        // 🔥 โหลดชื่อที่บันทึกไว้จาก AsyncStorage
-        let deviceName = deviceInfo.deviceName || 'Digital Signage Device';
-
-        try {
-            const savedName = await AsyncStorage.getItem('customDeviceName');
-            if (savedName) {
-                deviceName = savedName;
-                console.log('✅ Loaded device name from storage:', deviceName);
-            } else {
-                console.log('ℹ️ No saved device name, using default:', deviceName);
-            }
-        } catch (error) {
-            console.warn('⚠️ Failed to load device name from storage:', error);
-        }
 
         const registrationData = {
             deviceId: deviceIdRef.current,
             uniqueId: deviceIdRef.current,
             instanceId: '',
             deviceOS: Device.osName,
-            deviceName: deviceName, // ✅ ใช้ชื่อจาก storage หรือ default
+            deviceName: deviceInfo.deviceName || 'Digital Signage Device',
             modelName: '',
-            ipAddress: currentIp, // ✅ ใช้ IP ที่ดึงใหม่
+            ipAddress: ip,
             macAddress: '',
             status: 'online',
             screenResolution: {
@@ -603,9 +328,7 @@ export default function HomePage() {
             orientation: height > width ? 'portrait' : 'landscape'
         };
 
-        console.log('📤 Sending device registration with IP:', currentIp);
-        console.log('📤 Sending device registration with name:', deviceName);
-        console.log('📋 Registration data:', registrationData);
+        console.log('Sending device registration:', registrationData);
         socketRef.current.emit('device:register', registrationData);
     };
 
@@ -645,13 +368,6 @@ export default function HomePage() {
     };
 
     useEffect(() => {
-        // ✅ ป้องกัน multiple initialization
-        if (hasInitializedRef.current) {
-            console.log('⚠️ Already initialized, skipping...');
-            return;
-        }
-
-        hasInitializedRef.current = true;
         const registerDevice = async () => {
             try {
                 setConnectionStatus('Getting Device Info...');
@@ -666,25 +382,11 @@ export default function HomePage() {
 
                 console.log('Device IP:', ip);
 
-                // 🔥 โหลดชื่อที่บันทึกไว้จาก AsyncStorage (ถ้ามี)
-                let deviceName = Device.deviceName; // ชื่อ hardware เป็น default
-                try {
-                    const savedName = await AsyncStorage.getItem('customDeviceName');
-                    if (savedName) {
-                        deviceName = savedName;
-                        console.log('✅ Loaded saved device name:', deviceName);
-                    } else {
-                        console.log('ℹ️ No saved name, using hardware name:', deviceName);
-                    }
-                } catch (error) {
-                    console.warn('⚠️ Failed to load device name:', error);
-                }
-
                 const deviceData = {
                     // serialNumber,
                     deviceId: uniqueId,
                     deviceOS: Device.osName,
-                    deviceName: deviceName, // ✅ ใช้ชื่อที่โหลดจาก storage หรือ hardware
+                    deviceName: Device.deviceName,
                     ipAddress: ip,
                     instanceId: DeviceInfo.getInstanceId(),
                     uniqueId: uniqueId,
@@ -735,48 +437,23 @@ export default function HomePage() {
                 console.error("Register failed:", err);
                 setError("Device registration failed");
                 setConnectionStatus('Registration Failed');
-                hasInitializedRef.current = false;
             }
         };
 
         registerDevice();
 
         // Cleanup function
-        // return () => {
-        //     stopStimulate();
-
-        //     if (reconnectTimeoutRef.current) {
-        //         clearTimeout(reconnectTimeoutRef.current);
-        //     }
-
-        //     if (socketRef.current) {
-        //         socketRef.current.disconnect();
-        //         console.log("Socket disconnected");
-        //     }
-        // };
         return () => {
-            console.log('🧹 Cleaning up HomePage...');
             stopStimulate();
-
-            if (navigationTimeoutRef.current) {
-                clearTimeout(navigationTimeoutRef.current);
-            }
 
             if (reconnectTimeoutRef.current) {
                 clearTimeout(reconnectTimeoutRef.current);
             }
 
             if (socketRef.current) {
-                socketRef.current.removeAllListeners();
                 socketRef.current.disconnect();
-                socketRef.current = null;
                 console.log("Socket disconnected");
             }
-
-            // Reset refs
-            lastMediaIdRef.current = null;
-            isInitializingRef.current = false;
-            hasInitializedRef.current = false;
         };
     }, []);
 
@@ -815,24 +492,18 @@ export default function HomePage() {
                 </View>
 
                 <View style={styles.bottomContent}>
-                    {/* <View style={styles.qrContainer}>
+                    <View style={styles.qrContainer}>
                         <View style={styles.qrCodeBox}>
                             <Text style={styles.qrPlaceholder}>QR CODE</Text>
                             <Text style={styles.qrText}>สแกนเพื่อลงทะเบียน</Text>
                         </View>
-                    </View> */}
-                    {/* <View style={styles.statusContainer}>
+                    </View>
+                    <View style={styles.statusContainer}>
                         <View style={[styles.statusDot, isOnline && isConnected && styles.statusDotOnline]} />
                         <Text style={styles.statusText}>
                             {isOnline ? (isConnected ? 'Online' : 'Connecting...') : 'Offline'}
                         </Text>
-                    </View> */}
-                </View>
-                <View style={styles.statusContainer}>
-                    <View style={[styles.statusDot, isOnline && isConnected && styles.statusDotOnline]} />
-                    <Text style={styles.statusText}>
-                        {isOnline ? (isConnected ? 'Online' : 'Connecting...') : 'Offline'}
-                    </Text>
+                    </View>
                 </View>
                 <View style={styles.deviceBox}>
                     <Text style={styles.deviceInfoText} numberOfLines={1}>

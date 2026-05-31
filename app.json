@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "cast-ads-app",
-    "slug": "cast-ads-app",
+    "name": "Cure Cast",
+    "slug": "cure-cast",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": ".src/assets/images/cure.png",
+    "icon": ".src/assets/images/Cast.png",
     "scheme": "castadsapp",
     "platforms": ["ios", "android", "web"],
     "userInterfaceStyle": "automatic",
@@ -15,11 +15,11 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": ".src/assets/images/cure.png",
+        "foregroundImage": ".src/assets/images/Cast.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.castadsapp"
+      "package": "com.curecast.app"
     },
     "web": {
       "bundler": "metro",
@@ -31,7 +31,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./src/assets/images/cure.png",
+          "image": "./src/assets/images/Cast.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
@@ -47,6 +47,8 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "statusBarHidden": true
+
   }
 }

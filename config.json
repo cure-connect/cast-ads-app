@@ -42,14 +42,6 @@
           "supportsBackgroundPlayback": true,
           "supportsPictureInPicture": true
         }
-      ],
-      [
-        "expo-env",
-        {
-          "variables": {
-            "API_URL": "http://141.98.17.189:3004"
-          }
-        }
       ]
     ],
     "experiments": {
